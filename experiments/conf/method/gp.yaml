@@ -1,0 +1,10 @@
+# @package _global_
+method: gp
+
+method_params:
+  kernel_type: "matern"
+  nu: 2.5
+  alpha: 1e-10
+  n_restarts_optimizer: 10
+  normalize_y: true
+  random_state: null

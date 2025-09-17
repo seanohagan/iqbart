@@ -1,0 +1,19 @@
+defaults:
+  - experiment: cdmixture
+  - method: iqbart
+  - _self_
+
+experiment: ???
+method: ???
+repetition: 0
+n_data: 1000
+eval_grid_size: 100
+
+seed_offset: 1000
+cxx: /usr/bin/clang++
+
+hydra:
+  job:
+    chdir: true
+  run:
+    dir: outputs/${now:%Y-%m-%d_%H-%M-%S}

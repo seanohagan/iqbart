@@ -1,0 +1,31 @@
+# pyproject.toml
+
+[project]
+# Basic project metadata
+name = "iqbart-experiments"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+# This section replaces `requirements.in`
+dependencies = [
+    "pymc==5.15.1",
+    "pymc-bart==0.6",
+    "arviz>=0.18",
+    "hydra-core",
+    "hydra-submitit-launcher",
+    "numpy",
+    "scipy",
+    "pandas",
+    "scikit-learn",
+    "tqdm",
+    "pytensor==2.22.1",
+    "jax",
+    "flax",
+    "optax",
+    "rpy2",
+]
+
+[tool.uv]
+override-dependencies = [
+    "llvmlite==0.43.0",
+]

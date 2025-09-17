@@ -1,0 +1,13 @@
+# @package _global_
+experiment: lstar
+
+experiment_params:
+  domain: [[-5.0, 10.0]]
+  quantile_range: [0.01, 0.99]
+  rho1: 0
+  rho2: 0.9
+  gamma: 5
+  c: 0
+  sigma_eps: 1
+  nu: 3
+  T: 15000

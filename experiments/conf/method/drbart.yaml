@@ -1,0 +1,8 @@
+# @package _global_
+method: drbart
+
+method_params:
+  nburn: 200
+  nsim: 200
+  ygrid_size: 200
+  r_verbose: false

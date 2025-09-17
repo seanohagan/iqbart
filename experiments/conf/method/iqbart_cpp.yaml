@@ -1,0 +1,19 @@
+# @package _global_
+method: iqbart_cpp
+
+method_params:
+  n_trees: 200
+  alpha: 0.5
+  beta: 0.25
+  mybeta: 0.8
+  n_tune: 100
+  n_draw: 100
+  nm: 20
+  n_quantile_samples_per_datum: 1
+  phi: 1.0
+  tau: 0.95
+  nu: 3.0
+  lambda_val: 0.9
+  printevery: 50
+  data_aug: false
+  n_chains: 4

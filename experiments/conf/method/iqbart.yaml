@@ -1,0 +1,14 @@
+# @package _global_
+method: iqbart
+
+method_params:
+  n_trees: 200
+  alpha: 0.95
+  beta: 2.0
+  n_tune: 100
+  n_draw: 100
+  n_quantile_samples_per_datum: 1
+  hn_scale: 1.0
+  posterior_predictive_method: "mean"
+  sig_random: true
+  learning_rate: 1

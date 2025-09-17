@@ -1,0 +1,6 @@
+# @package _global_
+experiment: stealthy_chameleon
+
+experiment_params:
+  domain: [[0.0, 1.0]]
+  quantile_range: [0.01, 0.99]
