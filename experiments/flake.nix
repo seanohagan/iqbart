@@ -16,7 +16,7 @@
         iqbart-cpp = pkgs.stdenv.mkDerivation {
           pname = "iqbart-cpp";
           version = "0.1.0";
-          src = ../iqbart;
+          src = pkgs.lib.cleanSource ../iqbart;
           nativeBuildInputs = [ pkgs.cmake pkgs.python311Packages.pybind11];
           buildInputs = [pkgs.python311 ];
           installPhase = ''
