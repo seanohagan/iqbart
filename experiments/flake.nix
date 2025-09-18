@@ -16,7 +16,7 @@
         iqbart-cpp = pkgs.stdenv.mkDerivation {
           pname = "iqbart-cpp";
           version = "0.1.0";
-          src = ./iqbart;
+          src = ../iqbart;
           nativeBuildInputs = [ pkgs.cmake pkgs.python311Packages.pybind11];
           buildInputs = [pkgs.python311 ];
           installPhase = ''
@@ -34,7 +34,6 @@
             pkgs.R
             pkgs.gcc
             pkgs.git
-            # We're back to using the modern LLVM.
             pkgs.llvm
           ];
 
