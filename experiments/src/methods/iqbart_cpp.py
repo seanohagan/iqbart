@@ -1,5 +1,33 @@
 import numpy as np
 import warnings
+from ..core.types import PredictionResult
+
+
+def augment_test_grid(X_test: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """
+    Augment X_test with quantiles q to create Cartesian product.
+    
+    Args:
+        X_test: np.array shape (np, p) - test covariates.
+        q: np.array shape (l_qp,) - quantiles.
+    
+    Returns:
+        np.array shape (np * l_qp, p + 1) - augmented grid, last col = q appended.
+    """
+    np_val, p = X_test.shape
+    l_qp = len(q)
+    
+    # Repeat each test row l_qp times (broadcasting to pair with each q)
+    repeated_x = np.repeat(X_test, l_qp, axis=0)  # Shape: (np * l_qp, p)
+    
+    # Repeat q for each test point: tile to (np * l_qp,)
+    repeated_q = np.tile(q, np_val)  # Shape: (np * l_qp,)
+    
+    # Append q as new last column (hstack)
+    xp_augmented = np.column_stack((repeated_x, repeated_q))  # Shape: (np * l_qp, p + 1)
+    
+    return xp_augmented
+
 
 # Try to import the compiled C++ module with graceful fallback
 try:
@@ -101,18 +129,26 @@ class IQBARTCPP:
                     indices = np.linspace(0, len(quantiles)-1, output_shape, dtype=int)
                     quantiles = quantiles[indices]
 
+        xp_augmented = augment_test_grid(X_test, q)
+
+        n_pred = len(xp_augmented)
+
+        if "X_test_fixed" in kwargs and "q_fixed" in kwargs:
+            xp_fixed = augment_test_grid(kwargs["X_test_fixed"], kwargs["q_fixed"])
+            xp_augmented = np.concatenate((xp_augmented, xp_fixed), axis=0)
+
         # Ensure all inputs are float64, as expected by the C++ code
         x_train = np.ascontiguousarray(self.X_train_, dtype=np.float64)
         y_train = np.ascontiguousarray(self.y_train_, dtype=np.float64)
-        x_test = np.ascontiguousarray(X_test, dtype=np.float64)
-        q_test = np.ascontiguousarray(quantiles, dtype=np.float64)
+        xp_augmented = np.ascontiguousarray(xp_augmented, dtype=np.float64)
+        # q_test = np.ascontiguousarray(quantiles, dtype=np.float64)
 
         # Call the C++ function exposed by pybind11
         results = iqbart_cpp.iqbart(
             x=x_train,
             y=y_train,
-            xp=x_test,
-            qp=q_test,
+            xp_augmented=xp_augmented,
+            # qp=q_test,
             tau=self.tau,
             nu=self.nu,
             lambda_val=self.lambda_val,
@@ -139,25 +175,82 @@ class IQBARTCPP:
         n_samples = X_test.shape[0]
         n_quantiles = len(quantiles)
 
-        # Collect predictions from all chains
-        all_chain_predictions = []
+        # Collect predictions from all chains (slice BEFORE reshaping)
+        all_chain_predictions_random = []
+        all_chain_predictions_fixed = []
 
         for chain_idx in range(results.num_chains):
-            # Get results for this chain
-            chain_results = results.chain_results[chain_idx]  # Access chain_idx-th IQBartResults
+            chain_results = results.chain_results[chain_idx]
 
-            # Convert yhat_test_mean to numpy array and reshape
-            # Each chain has shape (n_samples * n_quantiles,)
-            chain_predictions = np.array(chain_results.yhat_test_mean).reshape(n_samples, n_quantiles)
-            all_chain_predictions.append(chain_predictions)
+            # Get flat predictions and slice BEFORE reshaping
+            flat_predictions = np.array(chain_results.yhat_test_mean)
 
-        # Stack predictions from all chains: shape (num_chains, n_samples, n_quantiles)
-        all_chains = np.stack(all_chain_predictions, axis=0)
+            # Split flat predictions: first n_pred are random, rest are fixed
+            flat_random = flat_predictions[:n_pred]
+            flat_fixed = flat_predictions[n_pred:]
 
-        # Average across chains to get final predictions: shape (n_samples, n_quantiles)
-        predictions = np.mean(all_chains, axis=0)
+            # Now reshape each part separately
+            chain_predictions_random = flat_random.reshape(n_samples, n_quantiles)
+            if len(flat_fixed) > 0:
+                n_fixed_points = len(kwargs.get("X_test_fixed", []))
+                n_fixed_quantiles = len(kwargs.get("q_fixed", []))
+                chain_predictions_fixed = flat_fixed.reshape(n_fixed_points, n_fixed_quantiles)
+            else:
+                chain_predictions_fixed = np.array([]).reshape(0, 0)
 
-        return predictions
+            all_chain_predictions_random.append(chain_predictions_random)
+            all_chain_predictions_fixed.append(chain_predictions_fixed)
+
+        # Stack & average for random predictions
+        all_chains_random = np.stack(all_chain_predictions_random, axis=0)
+        predictions_random = np.mean(all_chains_random, axis=0)
+
+        # Stack & average for fixed predictions (if available)
+        if len(all_chain_predictions_fixed[0]) > 0:
+            all_chains_fixed = np.stack(all_chain_predictions_fixed, axis=0)
+            predictions_fixed = np.mean(all_chains_fixed, axis=0)
+        else:
+            predictions_fixed = np.array([]).reshape(0, 0)
+
+        # Collect posterior samples (slice BEFORE reshaping)
+        all_chain_samples_random = []
+        all_chain_samples_fixed = []
+
+        for chain_idx in range(results.num_chains):
+            chain_results = results.chain_results[chain_idx]
+
+            # Get flat draws: (num_draws, total_points)
+            flat_draws = np.array(chain_results.yhat_test_draws)  # (num_draws, total_points)
+            draws_transposed = flat_draws.T  # (total_points, num_draws)
+
+            # Split draws: first n_pred are random, rest are fixed
+            draws_random = draws_transposed[:n_pred, :]  # (n_pred, num_draws)
+            draws_fixed = draws_transposed[n_pred:, :]    # (remaining, num_draws)
+
+            # Reshape random samples
+            chain_samples_random = draws_random.reshape(n_samples, n_quantiles, self.nd)
+
+            # Reshape fixed samples (if available)
+            if len(draws_fixed) > 0:
+                n_fixed_points = len(kwargs.get("X_test_fixed", []))
+                n_fixed_quantiles = len(kwargs.get("q_fixed", []))
+                chain_samples_fixed = draws_fixed.reshape(n_fixed_points, n_fixed_quantiles, self.nd)
+            else:
+                chain_samples_fixed = np.array([]).reshape(0, 0, self.nd)
+
+            all_chain_samples_random.append(chain_samples_random)
+            all_chain_samples_fixed.append(chain_samples_fixed)
+
+        # Stack samples from all chains
+        posterior_samples_random = np.stack(all_chain_samples_random, axis=0)  # (num_chains, n_samples, n_quantiles, n_draws)
+
+        if all_chain_samples_fixed and all_chain_samples_fixed[0].size > 0:
+            posterior_samples_fixed = np.stack(all_chain_samples_fixed, axis=0)  # (num_chains, n_fixed_points, n_fixed_quantiles, n_draws)
+        else:
+            posterior_samples_fixed = np.array([]).reshape(0, 0, 0, self.nd)
+
+        return PredictionResult(predictions=predictions_random, posterior_samples=posterior_samples_random,
+                              fixed_predictions=predictions_fixed, fixed_posterior_samples=posterior_samples_fixed)
 
 
 def fit_predict(X_train: np.ndarray, y_train: np.ndarray,
@@ -208,7 +301,7 @@ def fit_predict(X_train: np.ndarray, y_train: np.ndarray,
 
     model.fit(X_train, y_train)
 
-    predictions = model.predict(x_grid, q=q_grid, output_shape=len(q_grid))
-    print(np.sum(predictions))
+    result = model.predict(x_grid, q=q_grid, output_shape=len(q_grid), **kwargs)
+    print(np.sum(result.predictions))
 
-    return predictions
+    return result

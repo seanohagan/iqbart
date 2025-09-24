@@ -10,10 +10,10 @@ IQBartResults iqbart(
     double* y,
     size_t p,
     size_t n,
-    double* xp,
-    size_t np,
-    double* qp,
-    size_t l_qp,
+    double* xp_augmented,
+    size_t np_augmented,
+    // double* qp,
+    // size_t l_qp,
     double tau,
     double nu,
     double lambda,
@@ -55,22 +55,22 @@ IQBartResults iqbart(
     //std::cout << "Augmented training X matrix with new shape (" << n << ", " << p_new << ")." << std::endl;
 
     // --- Step 3: Construct the augmented test dataset (Cartesian product of xp and qp) ---
-    size_t np_new = np * l_qp;
-    std::vector<double> xp_augmented(np_new * p_new);
-    if (np > 0 && l_qp > 0) {
-        for (size_t i = 0; i < np; ++i) { // For each original test point
-            for (size_t j = 0; j < l_qp; ++j) { // For each desired quantile
-                size_t new_row_idx = i * l_qp + j;
-                // Copy original p predictors
-                for (size_t k = 0; k < p; ++k) {
-                    xp_augmented[new_row_idx * p_new + k] = xp[i * p + k];
-                }
-                // Add the specific quantile as the last predictor
-                xp_augmented[new_row_idx * p_new + p] = qp[j];
-            }
-        }
+    // size_t np_new = np * l_qp;
+    // std::vector<double> xp_augmented(np_new * p_new);
+    // if (np > 0 && l_qp > 0) {
+    //     for (size_t i = 0; i < np; ++i) { // For each original test point
+    //         for (size_t j = 0; j < l_qp; ++j) { // For each desired quantile
+    //             size_t new_row_idx = i * l_qp + j;
+    //             // Copy original p predictors
+    //             for (size_t k = 0; k < p; ++k) {
+    //                 xp_augmented[new_row_idx * p_new + k] = xp[i * p + k];
+    //             }
+    //             // Add the specific quantile as the last predictor
+    //             xp_augmented[new_row_idx * p_new + p] = qp[j];
+    //         }
+    //     }
         //std::cout << "Created augmented test matrix with shape (" << np_new << ", " << p_new << ")." << std::endl;
-    }
+    // }
 
     // --- Step 4: Create the new monotone_flags vector ---
     std::vector<bool> monotone_flags(p_new, false);
@@ -82,7 +82,7 @@ IQBartResults iqbart(
     //std::cout << "\n***** Calling core cmonbart function... *****" << std::endl;
     MonBartResults monbart_results = cmonbart(
         x_augmented.data(), y, p_new, n,
-        xp_augmented.data(), np_new,
+        xp_augmented, np_augmented,
         tau, nu, lambda, alpha, mybeta, phi,
         nd, burn, m, nm,
         nkeeptrain, nkeeptest, nkeeptestme, nkeeptreedraws,
@@ -102,29 +102,44 @@ IQBartResults iqbart(
     iq_results.tree_draws = std::move(monbart_results.tree_draws);
 
     // Reshape the posterior mean for test predictions
-    if (np > 0 && l_qp > 0 && !monbart_results.yhat_test_mean.empty()) {
-        iq_results.yhat_test_mean.resize(np, std::vector<double>(l_qp));
-        for (size_t i = 0; i < np; ++i) {
-            for (size_t j = 0; j < l_qp; ++j) {
-                size_t flat_index = i * l_qp + j;
-                iq_results.yhat_test_mean[i][j] = monbart_results.yhat_test_mean[flat_index];
-            }
-        }
+    // if (np > 0 && l_qp > 0 && !monbart_results.yhat_test_mean.empty()) {
+    //     iq_results.yhat_test_mean.resize(np, std::vector<double>(l_qp));
+    //     for (size_t i = 0; i < np; ++i) {
+    //         for (size_t j = 0; j < l_qp; ++j) {
+    //             size_t flat_index = i * l_qp + j;
+    //             iq_results.yhat_test_mean[i][j] = monbart_results.yhat_test_mean[flat_index];
+    //         }
+    //     }
+    // }
+
+
+    if (np_augmented > 0 && !monbart_results.yhat_test_mean.empty()) {
+        iq_results.yhat_test_mean = std::move(monbart_results.yhat_test_mean);  // Flat {np * l_qp}
+        // iq_results.yhat_test_mean.reshape({np, l_qp});  // O(1) view update
     }
 
     // Reshape the posterior draws for test predictions
-    if (np > 0 && l_qp > 0 && !monbart_results.yhat_test_draws.empty()) {
-        size_t num_draws = monbart_results.yhat_test_draws.size();
-        iq_results.yhat_test_draws.resize(np, std::vector<std::vector<double>>(l_qp, std::vector<double>(num_draws)));
+    // if (np > 0 && l_qp > 0 && !monbart_results.yhat_test_draws.empty()) {
+    //     size_t num_draws = monbart_results.yhat_test_draws.size();
+    //     iq_results.yhat_test_draws.resize(np, std::vector<std::vector<double>>(l_qp, std::vector<double>(num_draws)));
 
-        for (size_t d = 0; d < num_draws; ++d) {
-            for (size_t i = 0; i < np; ++i) {
-                for (size_t j = 0; j < l_qp; ++j) {
-                    size_t flat_index = i * l_qp + j;
-                    iq_results.yhat_test_draws[i][j][d] = monbart_results.yhat_test_draws[d][flat_index];
-                }
-            }
-        }
+    //     for (size_t d = 0; d < num_draws; ++d) {
+    //         for (size_t i = 0; i < np; ++i) {
+    //             for (size_t j = 0; j < l_qp; ++j) {
+    //                 size_t flat_index = i * l_qp + j;
+    //                 iq_results.yhat_test_draws[i][j][d] = monbart_results.yhat_test_draws[d][flat_index];
+    //             }
+    //         }
+    //     }
+    // }
+    //
+
+    
+    if (np_augmented > 0 && !monbart_results.yhat_test_draws.empty()) {
+        size_t num_draws = monbart_results.yhat_test_draws.shape()[0];  // Get draw dim before move
+        iq_results.yhat_test_draws = std::move(monbart_results.yhat_test_draws);  // Flat {num_draws, np * l_qp}
+        size_t total_flat = iq_results.yhat_test_draws.size();  // np * l_qp * num_draws (verify if needed)
+        // iq_results.yhat_test_draws.reshape({np, l_qp, num_draws});  // 3D contiguous view
     }
 
     //std::cout << "***** Reshaped results and returning from iqbart *****" << std::endl;
@@ -136,10 +151,10 @@ IQBartParResults iqbart_par(
     double* y,
     size_t p,
     size_t n,
-    double* xp,
-    size_t np,
-    double* qp,
-    size_t l_qp,
+    double* xp_augmented,
+    size_t np_augmented,
+    // double* qp,
+    // size_t l_qp,
     double tau,
     double nu,
     double lambda,
@@ -168,7 +183,7 @@ IQBartParResults iqbart_par(
         size_t chain_printevery = (printevery == 0)? 0 : nd + burn + 1;
 
         futures.push_back(std::async(std::launch::async, iqbart,
-            x, y, p, n, xp, np, qp, l_qp, tau, nu, lambda, alpha, mybeta, phi,
+            x, y, p, n, xp_augmented, np_augmented, tau, nu, lambda, alpha, mybeta, phi,
             nd, burn, m, nm, nkeeptrain, nkeeptest, nkeeptestme, nkeeptreedraws,
             chain_printevery, data_aug, chain_seed
         ));

@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "tensor.h"
 
 // Struct to hold tree information
 struct TreeDraws {
@@ -12,11 +13,10 @@ struct TreeDraws {
 
 // Struct to hold the results
 struct MonBartResults {
-    std::vector<double> sigma_draws;
-    std::vector<std::vector<double>> yhat_train_draws;
-    std::vector<std::vector<double>> yhat_test_draws;
-    std::vector<double> yhat_train_mean;
-    std::vector<double> yhat_test_mean;
+    Tensor<double> yhat_train_draws;
+    Tensor<double> yhat_test_draws;
+    Tensor<double> yhat_train_mean;
+    Tensor<double> yhat_test_mean;
     TreeDraws tree_draws;
 };
 

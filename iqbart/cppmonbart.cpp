@@ -211,12 +211,14 @@ MonBartResults cmonbart(
    //--------------------------------------------------
    //return data structures
    MonBartResults results;
-   // results.sigma_draws.resize(nd+burn);
-   results.yhat_train_draws.resize(nkeeptrain, std::vector<double>(n));
-   results.yhat_test_draws.resize(nkeeptest, std::vector<double>(np));
-   results.yhat_train_mean.resize(n, 0.0);
+
+   results.yhat_train_draws = Tensor<double>{nkeeptrain, n};
+   results.yhat_test_draws = Tensor<double>{nkeeptest, np};
+
+   results.yhat_train_mean = Tensor<double>{n};
    if (np > 0) {
-       results.yhat_test_mean.resize(np, 0.0);
+       // results.yhat_test_mean.resize(np, 0.0);
+       results.yhat_test_mean = Tensor<double>{np};
    }
 
 
@@ -273,10 +275,10 @@ MonBartResults cmonbart(
       // pi.sigma = sqrt((nu*lambda + rss)/gen.chi_square());
       // results.sigma_draws[i]=pi.sigma;
       if(i>=burn) {
-         for(size_t k=0;k<n;k++) results.yhat_train_mean[k]+=allfit[k];
+         for(size_t k=0;k<n;k++) results.yhat_train_mean(k)+=allfit[k];
 
          if(nkeeptrain && (((i-burn+1) % skiptr) ==0)) {
-            for(size_t k=0;k<n;k++) results.yhat_train_draws[trcnt][k]=allfit[k];
+            for(size_t k=0;k<n;k++) results.yhat_train_draws(trcnt,k)=allfit[k];
             trcnt+=1;
          }
 
@@ -290,11 +292,11 @@ MonBartResults cmonbart(
             }
          }
          if(keeptest) {
-            for(size_t k=0;k<np;k++) results.yhat_test_draws[tecnt][k]=ppredmean[k];
+            for(size_t k=0;k<np;k++) results.yhat_test_draws(tecnt,k)=ppredmean[k];
             tecnt+=1;
          }
          if(keeptestme) {
-            for(size_t k=0;k<np;k++) results.yhat_test_mean[k]+=ppredmean[k];
+            for(size_t k=0;k<np;k++) results.yhat_test_mean(k)+=ppredmean[k];
             temecnt+=1;
          }
          keeptreedraw = nkeeptreedraws && (((i-burn+1) % skiptreedraws) ==0);
@@ -305,13 +307,13 @@ MonBartResults cmonbart(
       }
    }
    int time2 = time(&tp);
-   //cout << "time for loop: " << time2-time1 << endl;
+   cout << "time for loop: " << time2-time1 << endl;
    //cout << "check counts" << endl;
    //cout << "trcnt,tecnt,temecnt,treedrawscnt: " << trcnt << "," << tecnt << "," << temecnt << ", " << treedrawscnt << endl;
 
-   for(size_t k=0;k<n;k++) results.yhat_train_mean[k]/=nd;
+   for(size_t k=0;k<n;k++) results.yhat_train_mean(k)/=nd;
    if (temecnt > 0) {
-       for(size_t k=0;k<np;k++) results.yhat_test_mean[k]/=temecnt;
+       for(size_t k=0;k<np;k++) results.yhat_test_mean(k)/=temecnt;
    }
 
 
